@@ -1,0 +1,197 @@
+---
+title: "Econometrics R Manual"
+author: "Roman Sigalov"
+date: "8 August 2016"
+output:
+  html_document:
+    highlight: pygments
+    toc: yes
+---
+
+### Introduction
+R reminds much more of a traditional programming language when compared to STATA. Hence its capabilities are much bigger and econometrics is not the only subject where you can use it. It is widely used among researches including economists, in data science, machine learning and other fields. One of the best things about R is that it is FREE and OPEN-SOURCE which mean that if you prefer R to STATA you get (1) great variety of packages capable of doing almost anything and (2) enormous community (on such platforms as stackexchange) which is able to give you an answer on virtually every question. So, if decide to use R during this semester, you are more than welcome to ask help from me, but I strongly encourage you to google your question first, after all, this is the way that even experienced programmist work, they google.
+
+However, there are drawbacks in using R. The most important (and some may say that the only one) is that its learning curve is very steep. It is hard to start programming in R, understand how the function work and how to deal with new problems. The second thing is that its function are limited out-of-the-box and you need to download additional packages if you want to have more functionality. 
+
+In this tutorial, which I will be updating on a constant basis, I will explain how to do everything that Konstantin is doing in STATA as well as some specific things about this language and overview of an incredibly powerful plotting package called "ggplot2".
+
+### Basics
+Here we will cover the main features of R that are not related to econometrics. We will cover basic data types, how to do basic operations and some trickier stuff that you will need in the future.
+
+### Data.
+Here I will explain how to get data into R. Both from local computer in different formats as well as from the web.
+
+### Loops, conditional statements and other.
+
+### Packages
+Here I will highlight several packages that are very useful for data analysis and for your econometrics class as well. Some of them may do things that will be required later in the semester. So, if you do not understand yet what is Newey-West errors don't bother, you will catch up later.
+
+Almost every package that you will need are stored in so called The Comprehensive R Archive Network (CRAN). It means that you can simply install them by typing
+```{r,eval=FALSE}
+install.packages("ggplot2")
+```
+in R-console or RStudio. Lets list the packages that are either important for the course or give some interesting new function.
+
+```{r,eval=FALSE}
+library("sandwich")
+```
+is able to compute various kinds of standard errors including, White (Heteroskedasticity consistent errors, hence HC) and Newey-West (Heteroskedasticity and Autocorrelation Consistent errors, hence HAC).
+
+```{r,eval=FALSE}
+library("ggplot2")
+library("ggthemes")
+```
+first is able to plot almost anything you will every need to plot. Second adds additional themes to ggplot: you can make you graph look like The Economist Graph, WSJ or even STATA graph.
+
+```{r,eval=FALSE}
+library("sqldf")
+```
+allows you to manipulate data using SQLite language. If you you know SQL well it will probably become your favorite package. Otherwise, I will either show you how to do some stuff in it, or you may not bother much
+
+```{r,eval=FALSE}
+library("reshape")
+```
+allows you to do reverse pivot and other interesting things. **show reverse pivot example**
+
+```{r,eval=FALSE}
+library("DataCombine")
+```
+allows you to easily create lags for you regression
+
+```{r,eval=FALSE}
+library("xts")
+```
+additional capabilities for time series data manipulation, will be covered later. Below you can find other interesting packages.
+
+```{r}
+library("stargazer")
+```
+allows you to export regression results into LaTeX format.
+
+```{r,eval=FALSE}
+library("TTR") # for rolling volatility
+library("lubridate") # for operations on dates
+library("ghyp")
+library("MASS")
+library("xts")
+library("memisc")
+library("grid") # for arranging plots in grid
+library("psych")
+library("FinTS") # For GARCH regressions
+library("fGarch")
+```
+
+### Regressions I. Basics
+Here we are going to do a simple regression on our demo dataset. I will show how to access coefficients, predict, convert output to LaTeX and plot results.
+
+We are going to use data from CRSP and study companys' cash balances and what affects them. Let's import data and look what columns do we need:
+```{r}
+setwd("~")
+data <- read.csv("/Users/rsigalov/desktop/CRSP_data.csv", sep = ";")
+colnames(data)
+```
+Let's first estimate regression:
+$$ cash_i = \beta_0 + \beta_1ind\_cf\_vol_i + \varepsilon_i $$
+since volatility of cash flow of the industry ($ind\_cf\_vol$) may be positively related to the cash that the firm wants to hold to absorb risks. Use command summary to print the output of the regression:
+```{r}
+model <- lm(data = data, cash ~ ind_cf_vol)
+summary(model)
+```
+The object that `summary()` command creates contains a lot of useful information. For example:
+```{r}
+sum <- summary(model)
+sum$coefficients # outputs a matrix
+sum$r.squared
+sum$fstatistic
+```
+Using coefficients we can manually predict cash balance:
+```{r}
+beta_0 <- sum$coefficients[1,1]
+beta_1 <- sum$coefficients[2,1]
+ind_cf_vol_1 <- 0.05
+beta_0 + beta_1 * ind_cf_vol_1
+```
+But, of course, we can predict easier using our model object:
+```{r}
+predict(model, newdata = (ind_cf_vol = 0.05))
+```
+or we can do it for several points (but we need to insert dataframe)
+```{r}
+predict(model, newdata = data.frame(ind_cf_vol = c(0.05, 0.06, 0.07, 0.08)))
+```
+and add confidence interval
+```{r}
+predict(model, newdata = data.frame(ind_cf_vol = c(0.05, 0.06, 0.07, 0.08)), interval = "confidence")
+```
+Let's plot our results using ggplot (in more details it will be explained in the next part):
+```{r, warning=FALSE,fig.align='center'}
+library("ggplot2")
+ggplot(data = data, aes(x = ind_cf_vol, y = cash)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) # fitting a line
+```
+Fitting multivariate regression and prediction is just as simple:
+```{r}
+model2 <- lm(data = data, cash ~ ind_cf_vol + rd_to_sales)
+predict(model2, 
+        newdata = data.frame(ind_cf_vol = c(0.05, 0.06), 
+                             rd_to_sales = c(0.3, 0.45)),
+        interval = "confidence")
+```
+Next we are goint to export summary for the second to LaTeX format using package `stargazer`:
+```{r}
+library("stargazer")
+```
+
+### Plotting. Introduction to ggplot2
+
+### Regressions II. Standard Errors
+Here I will show how to change standard errors as well as how to manipulate variance-covariance matrices and other important stuff. I will give you several examples of how to build confidence intervals and make graphs clearly representing your point.
+
+Let's continue to work with our previous example and subset data to include only one year. Use `unique()` function to select only inique values from a vector:
+```{r}
+unique(data$year) # Determining which years there are
+data2016 <- subset(x = data, year == 2016)
+```
+Since we might expect that each error are different for each firm we might want to use White standard errors. Using package `sandwich` we can estimate Heteroskedasticity consistent variance-covariance matrix:
+```{r,message=FALSE}
+library("sandwich")
+model <- lm(data = data, cash ~ ind_cf_vol + rd_to_sales)
+vcovHC(model) # Variance convariance matrix
+diag(vcovHC(model)) # Diagonal elements of VCOV
+sqrt(diag(vcovHC(model))) # standard errors
+```
+We can then test the coefficients using new errors using package `lmtest` and save these errors for subsequent use, for example, to export to LaTeX:
+```{r,message=FALSE}
+library("lmtest")
+coeftest(model, vcov = vcovHC(model))
+model_se <- sqrt(diag(vcovHC(model)))
+```
+Now we can create a LaTeX output with new standard errors **make Latex output table**.
+
+Later you will need to use Heteroskedasticity and Autocorrelation consistent standard error (or Newey-West standard errors) which can be evaluated using the same way and function `vcovHAC()`.
+
+### Regressions III. Transformatin of variables
+Here I will show you how to transform your variables to perform log-linear, linear-log, log-log, power and other regressions. 
+
+### Tables
+Here I will show you how to create LaTeX tables for your descriptive statistics and other
+
+### Regressions IV. F-statistics
+Here I will show how to compute F-statistics.
+
+### Regressions V. Probit and Logit
+Have you heard of neural networks? If you did and want to understand how they are working you first need to get Probit and Logit.
+
+### Plotting. More advanced ggplot2.
+
+### Dates, dates, dates...
+Working with dates is the most difficult part of data analysis, they are so unstandartised.
+
+### Regressions VI. Panel data
+
+### Regressions VII. Instrumental Variables and their friends
+
+### Regressions VIII. Time Series
+
+### Some Machine Learning for Prediction

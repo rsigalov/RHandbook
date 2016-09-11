@@ -159,7 +159,7 @@ img {
 <p>Here we are going to do a simple regression on our demo dataset. I will show how to access coefficients, predict, convert output to LaTeX and plot results.</p>
 <p>We are going to use data from CRSP and study companys’ cash balances and what affects them. Let’s import data and look what columns do we need:</p>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">setwd</span>(<span class="st">&quot;~&quot;</span>)
-data &lt;-<span class="st"> </span><span class="kw">read.csv</span>(<span class="st">&quot;/Users/rsigalov/desktop/CRSP_data.csv&quot;</span>, <span class="dt">sep =</span> <span class="st">&quot;;&quot;</span>)
+data &lt;-<span class="st"> </span><span class="kw">read.csv</span>(<span class="st">&quot;/Users/rsigalov/Documents/7Semester/R\ Econometrics\ Handbook/CRSP_data.csv&quot;</span>, <span class="dt">sep =</span> <span class="st">&quot;;&quot;</span>)
 <span class="kw">colnames</span>(data)</code></pre>
 <pre><code>##  [1] &quot;GVKEY&quot;               &quot;DATADATE&quot;            &quot;SIC&quot;                
 ##  [4] &quot;AT&quot;                  &quot;CHE&quot;                 &quot;DLC&quot;                
@@ -286,7 +286,24 @@ model &lt;-<span class="st"> </span><span class="kw">lm</span>(<span class="dt">
 </div>
 <div id="regressions-iii.-transformatin-of-variables" class="section level3">
 <h3>Regressions III. Transformatin of variables</h3>
-<p>Here I will show you how to transform your variables to perform log-linear, linear-log, log-log, power and other regressions.</p>
+<p>Here I will show you how to transform your variables to perform log-linear, linear-log, log-log, power and other regressions. First, you can always add another variable to the dataset and oridary regression:</p>
+<pre class="sourceCode r"><code class="sourceCode r">data$log_rd_to_sales &lt;-<span class="st"> </span><span class="kw">log</span>(data$rd_to_sales)
+<span class="kw">head</span>(data$log_rd_to_sales)</code></pre>
+<pre><code>## [1]      -Inf      -Inf      -Inf      -Inf -4.729433      -Inf</code></pre>
+<p>There are a lot of zeros, thus we need to exclude such observations in order to perform log regression:</p>
+<pre class="sourceCode r"><code class="sourceCode r">data_tmp &lt;-<span class="st"> </span>data[data$rd_to_sales !=<span class="st"> </span><span class="dv">0</span>, ]
+data_tmp$log_rd_to_sales &lt;-<span class="st"> </span><span class="kw">log</span>(data_tmp$rd_to_sales)
+model &lt;-<span class="st"> </span><span class="kw">lm</span>(<span class="dt">data =</span> data_tmp, <span class="dt">formula =</span> cash ~<span class="st"> </span>ind_cf_vol +<span class="st"> </span>log_rd_to_sales)</code></pre>
+<p>or you can simply specify it in the <code>lm()</code> function to create different kind of regressions:</p>
+<pre class="sourceCode r"><code class="sourceCode r">model &lt;-<span class="st"> </span><span class="kw">lm</span>(<span class="dt">data =</span> data_tmp, <span class="dt">formula =</span> cash ~<span class="st"> </span>ind_cf_vol +<span class="st"> </span><span class="kw">log</span>(rd_to_sales)) <span class="co"># linear-log</span>
+model &lt;-<span class="st"> </span><span class="kw">lm</span>(<span class="dt">data =</span> data_tmp, <span class="dt">formula =</span> <span class="kw">log</span>(cash) ~<span class="st"> </span>ind_cf_vol +<span class="st"> </span>rd_to_sales) <span class="co"># log-linear</span>
+model &lt;-<span class="st"> </span><span class="kw">lm</span>(<span class="dt">data =</span> data_tmp, <span class="dt">formula =</span> <span class="kw">log</span>(cash) ~<span class="st"> </span>ind_cf_vol +<span class="st"> </span><span class="kw">log</span>(rd_to_sales)) <span class="co"># log-log</span></code></pre>
+<p>In order to perform, for example, quadratic regression, we may again create additional variable:</p>
+<pre class="sourceCode r"><code class="sourceCode r">data$ind_cf_vol_sqr &lt;-<span class="st"> </span>(data$ind_cf_vol)^<span class="dv">2</span>
+model &lt;-<span class="st"> </span><span class="kw">lm</span>(<span class="dt">data =</span> data, <span class="dt">formula =</span> cash ~<span class="st"> </span>ind_cf_vol +<span class="st"> </span>ind_cf_vol_sqr)</code></pre>
+<p>or make the transformation inside <code>lm()</code> function using <code>I()</code>:</p>
+<pre class="sourceCode r"><code class="sourceCode r">model &lt;-<span class="st"> </span><span class="kw">lm</span>(<span class="dt">data =</span> data, <span class="dt">formula =</span> cash ~<span class="st"> </span>ind_cf_vol +<span class="st"> </span><span class="kw">I</span>(ind_cf_vol^<span class="dv">2</span>))
+model &lt;-<span class="st"> </span><span class="kw">lm</span>(<span class="dt">data =</span> data, <span class="dt">formula =</span> cash ~<span class="st"> </span>ind_cf_vol +<span class="st"> </span><span class="kw">I</span>(ind_cf_vol^<span class="dv">2</span>) +<span class="st"> </span><span class="kw">I</span>(ind_cf_vol^<span class="dv">3</span>))</code></pre>
 </div>
 <div id="tables" class="section level3">
 <h3>Tables</h3>

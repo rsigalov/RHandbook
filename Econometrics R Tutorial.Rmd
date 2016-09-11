@@ -87,7 +87,7 @@ Here we are going to do a simple regression on our demo dataset. I will show how
 We are going to use data from CRSP and study companys' cash balances and what affects them. Let's import data and look what columns do we need:
 ```{r}
 setwd("~")
-data <- read.csv("/Users/rsigalov/desktop/CRSP_data.csv", sep = ";")
+data <- read.csv("/Users/rsigalov/Documents/7Semester/R\ Econometrics\ Handbook/CRSP_data.csv", sep = ";")
 colnames(data)
 ```
 Let's first estimate regression:
@@ -172,7 +172,33 @@ Now we can create a LaTeX output with new standard errors **make Latex output ta
 Later you will need to use Heteroskedasticity and Autocorrelation consistent standard error (or Newey-West standard errors) which can be evaluated using the same way and function `vcovHAC()`.
 
 ### Regressions III. Transformatin of variables
-Here I will show you how to transform your variables to perform log-linear, linear-log, log-log, power and other regressions. 
+Here I will show you how to transform your variables to perform log-linear, linear-log, log-log, power and other regressions. First, you can always add another variable to the dataset and oridary regression:
+```{r,message=FALSE}
+data$log_rd_to_sales <- log(data$rd_to_sales)
+head(data$log_rd_to_sales)
+```
+There are a lot of zeros, thus we need to exclude such observations in order to perform log regression:
+```{r,message=FALSE}
+data_tmp <- data[data$rd_to_sales != 0, ]
+data_tmp$log_rd_to_sales <- log(data_tmp$rd_to_sales)
+model <- lm(data = data_tmp, formula = cash ~ ind_cf_vol + log_rd_to_sales)
+```
+or you can simply specify it in the `lm()` function to create different kind of regressions:
+```{r,message=FALSE}
+model <- lm(data = data_tmp, formula = cash ~ ind_cf_vol + log(rd_to_sales)) # linear-log
+model <- lm(data = data_tmp, formula = log(cash) ~ ind_cf_vol + rd_to_sales) # log-linear
+model <- lm(data = data_tmp, formula = log(cash) ~ ind_cf_vol + log(rd_to_sales)) # log-log
+```
+In order to perform, for example, quadratic regression, we may again create additional variable:
+```{r,message=FALSE}
+data$ind_cf_vol_sqr <- (data$ind_cf_vol)^2
+model <- lm(data = data, formula = cash ~ ind_cf_vol + ind_cf_vol_sqr)
+```
+or make the transformation inside `lm()` function using `I()`. You can add different transformation of the same variable (for example for fitting $y = \beta_0 + \beta_1 x + \beta_2 x^2$ using `I()` as well:
+```{r,message=FALSE}
+model <- lm(data = data, formula = cash ~ ind_cf_vol + I(ind_cf_vol^2))
+model <- lm(data = data, formula = cash ~ ind_cf_vol + I(ind_cf_vol^2) + I(ind_cf_vol^3))
+```
 
 ### Tables
 Here I will show you how to create LaTeX tables for your descriptive statistics and other

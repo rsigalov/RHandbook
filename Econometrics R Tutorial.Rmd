@@ -143,7 +143,111 @@ Next we are goint to export summary for the second to LaTeX format using package
 library("stargazer")
 ```
 
-### Plotting. Introduction to ggplot2
+### Plotting. Introduction to ggplot2.
+`ggplot2` is a wonderful package which will help you to create beautiful graphs. It can be tricky at first but as your demands will grow it will become indisensible. First let's create simple graph without ggplot, because it is easier to do it this way.
+```{r}
+time <- seq(0,10,0.01)
+ts <- sapply(time, sin)
+plot(x = time, y = ts, type = "l")
+```
+`sapply` is a very powerful function, it takes vector (in our case `time`) and applies function `sin` elementwise. If you will create your own function you can use it as well. For example:
+```{r}
+time <- seq(0,10,0.01)
+func <- function(x) {sin(x) + x}
+ts <- sapply(time, func)
+plot(x = time, y = ts, type = "l")
+```
+`ggplot` is definitely worse in plotting such data. Hence, I will show how to use it for more complicated datasets with a lot of variables that we want to somehow represent. 
+
+I have two datasets which represent results of backtesting of a trading strategy. First file contains parameters on the beginning of the backtest, second file on the end.
+```{r, message=FALSE}
+setwd("~")
+first <- read.csv("/Users/rsigalov/Documents/7Semester/R\ Econometrics\ Handbook/EURUSD_first.csv", sep = ";")
+last <- read.csv("/Users/rsigalov/Documents/7Semester/R\ Econometrics\ Handbook/EURUSD_last.csv", sep = ";")
+colnames(first)
+```
+I will do some manipulations with these files using `sql` language and show which columns do we have:
+```{r, message=FALSE}
+library("sqldf")
+stats <- sqldf("
+select
+  f.Scenario_Group as scenario_group,
+  f.Scenario as scenario,
+  l.Spot - f.Spot as spot_chg,
+  l.Position_Value + l.Acc_Trading_Gain - f.Option_Value as position_value_chg,
+  l.Trades as trades,
+  l.Option_Value - f.Option_Value as option_chg
+from last as l 
+  left join first as f on f.Scenario = l.Scenario and f.Scenario_Group = l.Scenario_Group
+               ")
+colnames(stats)
+```
+We have different scenario groups and different scenarios. First, let's plot change in position value against change in spot price of asset:
+
+```{r}
+library("ggplot2")
+ggplot(stats[stats$scenario_group == 160,], aes(x = spot_chg, y = position_value_chg)) +
+  geom_point()
+```
+
+However, we might want to show different groups we can do it by adding color into aes with which will depend on group:
+
+```{r}
+ggplot(stats, aes(x = spot_chg, y = position_value_chg, color = scenario_group)) +
+  geom_point()
+```
+
+ggplot suggested to use continuous scale for our groups, however, they are discrete and we can specify it by adding `factor()` around `scenario_group`:
+
+```{r}
+ggplot(stats, aes(x = spot_chg, y = position_value_chg, color = factor(scenario_group))) +
+  geom_point()
+```
+
+It looks like a mess, maybe it is better give each group a separate point type:
+
+```{r}
+ggplot(stats, aes(x = spot_chg, y = position_value_chg, shape = factor(scenario_group))) +
+  geom_point()
+```
+
+Well, there are not such as many point types. We can separate each group into seprate graph:
+```{r}
+stats$scenario_group <- as.character(stats$scenario_group)
+ggplot(stats, aes(x = spot_chg, y = position_value_chg)) +
+  geom_point() +
+  facet_wrap(~scenario_group)
+```
+
+Above I converted scenario_group column in character format from numerical, to avoid using `factor()`, for some reasons it doesn't work in facet. Of course, we can do not only points, but also lines. Below, I will show several examples. I have the following data:
+```{r}
+price_data <- read.csv("/Users/rsigalov/Documents/7Semester/R\ Econometrics\ Handbook/price_dynamics.csv", sep = ",")
+colnames(price_data)
+unique(price_data$sigma_e)
+unique(price_data$k_d)
+unique(price_data$lambda)
+```
+Let's first pick some values for `sigma_e`, `k_d` and `lambda`. I want to plot `price` against `time` and want to distinguish whether `price_cond` was above or below zero. 
+```{r}
+price_data_sub <- price_data[price_data$sigma_e==1 & price_data$k_d==1 & price_data$lambda==1,]
+ggplot(price_data_sub, aes(x = time, y = price, color = factor(price_cond >= 0))) +
+  geom_line()
+```
+Now I want to add different lines types for values of `lambda` (here we need to use `factor()` again):
+```{r}
+price_data_sub <- price_data[price_data$sigma_e==1 & price_data$k_d==1,]
+ggplot(price_data_sub, aes(x = time, y = price, color = factor(price_cond >= 0), linetype = factor(lambda))) +
+  geom_line()
+```
+
+and then we can make a grid with horizontal separation by `k_d` and vertical by `sigma_e`:
+```{r, fig.height=10, fig.width=10}
+ggplot(price_data, aes(x = time, y = price, color = factor(price_cond >= 0), linetype = factor(lambda))) +
+  geom_line() +
+  facet_grid(sigma_e ~ k_d)
+```
+
+Using combinations of facetting, linetype, linecolors you can show various proprties of a data on one single plot. This is just basics of `ggplot` I will include chapter on additional features later on. Meanwhile you can use this cheatsheet https://www.rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf which is really helpful.
 
 ### Regressions II. Standard Errors
 Here I will show how to change standard errors as well as how to manipulate variance-covariance matrices and other important stuff. I will give you several examples of how to build confidence intervals and make graphs clearly representing your point.

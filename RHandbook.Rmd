@@ -18,6 +18,55 @@ In this tutorial, which I will be updating on a constant basis, I will explain h
 ### Basics
 Here we will cover the main features of R that are not related to econometrics. We will cover basic data types, how to do basic operations and some trickier stuff that you will need in the future.
 
+#### Scalars and Vectors
+Let's start from the very beginning. You can assign value to variables using `<-`, `->` or `=`:
+```{r}
+a <- 3
+4 -> b # try not to do it at all
+c = 5
+a
+b
+c
+```
+R is designed to work with vectors and operatins in vector/ matrix forms are done very quickly. So try to use them instead of loop whenever possible. Creating vector and doing some operations on it:
+```{r}
+x <- c(1,2,3,4,5)
+x[3] # first element has index 1, not 0
+mean(x) # mean of vector values
+sd(x) # standard deviation of vector values
+median(x) # median value of vector values
+```
+By default when you are doing some operations on vector it is done element by element:
+```{r}
+y <- c(6,7,8,9,10)
+x + y
+x * y
+5 * y
+```
+If you want to multiply vectors in matrix form you need to specify it using `%*%`. For transposition use function `t()`:
+```{r}
+x %*% y
+x %*% t(y)
+```
+
+#### Matrices
+In order to create a matrix use command `matrix()` specifying vector and number of columns/rows:
+```{r}
+mat <- matrix(c(1,2,7,4,5,10,7,11,9), nrow = 3)
+mat1 <- matrix(c(1,2,3,4,5,6), ncol = 2)
+mat
+mat1
+```
+Pay attention to the fact that values are filled row-by-row to the matrix. Operations in scalar form work element-by-element as it was with vectors. Of course, we can multiply matrices, just pay attention to their dimesions or you will get an error:
+```{r}
+mat %*% mat1
+t(mat1) %*% mat
+```
+You can calculate determinant using `det()`:
+```{r}
+det(mat)
+```
+
 ### Data.
 Here I will explain how to get data into R. Both from local computer in different formats as well as from the web.
 
@@ -87,7 +136,7 @@ Here we are going to do a simple regression on our demo dataset. I will show how
 We are going to use data from CRSP and study companys' cash balances and what affects them. Let's import data and look what columns do we need:
 ```{r}
 setwd("~")
-data <- read.csv("/Users/rsigalov/Documents/7Semester/R\ Econometrics\ Handbook/CRSP_data.csv", sep = ";")
+data <- read.csv("/Users/rsigalov/Documents/HSENES/7Semester/R\ Econometrics\ Handbook/CRSP_data.csv", sep = ";")
 colnames(data)
 ```
 Let's first estimate regression:
@@ -138,10 +187,21 @@ predict(model2,
                              rd_to_sales = c(0.3, 0.45)),
         interval = "confidence")
 ```
-Next we are goint to export summary for the second to LaTeX format using package `stargazer`:
+Next we are going to export summary for the second to LaTeX format using package `stargazer`:
 ```{r}
 library("stargazer")
+stargazer(model2, type = "latex", df=FALSE, dep.var.labels = NULL, report = "vcp")
 ```
+Now you can copy and paste this code into latex and you will get a nice table. You can include different model into the same output latex-code and specify errors (standard errors will be covered in a great details later) that you want to report:
+```{r, results=FALSE}
+library("sandwich")
+se_model <- sqrt(diag(vcovHC(model)))
+se_model2 <- sqrt(diag(vcovHC(model2)))
+
+knitr::kable(stargazer(model, model2, type = "html", report = "vcp",
+          se = list(se_model, se_model2)))
+```
+Here I used `knitr::kable()` to directly put a table into html file. Stargazer has a lot of capabilities, for reference use this link http://jakeruss.com/cheatsheets/stargazer.html
 
 ### Plotting. Introduction to ggplot2.
 `ggplot2` is a wonderful package which will help you to create beautiful graphs. It can be tricky at first but as your demands will grow it will become indisensible. First let's create simple graph without ggplot, because it is easier to do it this way.
@@ -162,24 +222,22 @@ plot(x = time, y = ts, type = "l")
 I have two datasets which represent results of backtesting of a trading strategy. First file contains parameters on the beginning of the backtest, second file on the end.
 ```{r, message=FALSE}
 setwd("~")
-first <- read.csv("/Users/rsigalov/Documents/7Semester/R\ Econometrics\ Handbook/EURUSD_first.csv", sep = ";")
-last <- read.csv("/Users/rsigalov/Documents/7Semester/R\ Econometrics\ Handbook/EURUSD_last.csv", sep = ";")
+first <- read.csv("/Users/rsigalov/Documents/HSENES/7Semester/R\ Econometrics\ Handbook/EURUSD_first.csv", sep = ";")
+last <- read.csv("/Users/rsigalov/Documents/HSENES/7Semester/R\ Econometrics\ Handbook/EURUSD_last.csv", sep = ";")
 colnames(first)
 ```
-I will do some manipulations with these files using `sql` language and show which columns do we have:
+I will do some manipulations with these files and show which columns do we have in the end:
 ```{r, message=FALSE}
-library("sqldf")
-stats <- sqldf("
-select
-  f.Scenario_Group as scenario_group,
-  f.Scenario as scenario,
-  l.Spot - f.Spot as spot_chg,
-  l.Position_Value + l.Acc_Trading_Gain - f.Option_Value as position_value_chg,
-  l.Trades as trades,
-  l.Option_Value - f.Option_Value as option_chg
-from last as l 
-  left join first as f on f.Scenario = l.Scenario and f.Scenario_Group = l.Scenario_Group
-               ")
+stats <- merge(x = first, y = last, by = c("Scenario", "Scenario_Group"))
+stats$scenario_group <- stats$Scenario_Group
+stats$scenario <- stats$Scenario
+stats$spot_chg <- stats$Spot.y - stats$Spot.x
+stats$position_value_chg <- stats$Position_Value.y + stats$Acc_Trading_Gain.y - stats$Option_Value.x
+stats$trades <- stats$Trades
+stats$option_chg <- stats$Option_Value.y - stats$Option_Value.x
+
+stats <- stats[names(stats) %in% c("scenario_group", "scenario", "spot_chg", "position_value_chg", "trades", "option_chg")]
+
 colnames(stats)
 ```
 We have different scenario groups and different scenarios. First, let's plot change in position value against change in spot price of asset:
@@ -221,7 +279,7 @@ ggplot(stats, aes(x = spot_chg, y = position_value_chg)) +
 
 Above I converted scenario_group column in character format from numerical, to avoid using `factor()`, for some reasons it doesn't work in facet. Of course, we can do not only points, but also lines. Below, I will show several examples. I have the following data:
 ```{r}
-price_data <- read.csv("/Users/rsigalov/Documents/7Semester/R\ Econometrics\ Handbook/price_dynamics.csv", sep = ",")
+price_data <- read.csv("/Users/rsigalov/Documents/HSENES/7Semester/R\ Econometrics\ Handbook/price_dynamics.csv", sep = ",")
 colnames(price_data)
 unique(price_data$sigma_e)
 unique(price_data$k_d)
@@ -308,7 +366,31 @@ model <- lm(data = data, formula = cash ~ ind_cf_vol + I(ind_cf_vol^2) + I(ind_c
 Here I will show you how to create LaTeX tables for your descriptive statistics and other
 
 ### Regressions IV. F-statistics
-Here I will show how to compute F-statistics.
+In this section I will show you how to compute F-statistics for the regression and in general how to test linear hypotheses. This can be done using package `car`. Let's get back to our example with CRSP data and issue of companys' cash holdings with several explanatory variables:
+```{r}
+setwd("~")
+data <- read.csv("/Users/rsigalov/Documents/HSENES/7Semester/R\ Econometrics\ Handbook/CRSP_data.csv", sep = ";")
+model <- lm(data = data, formula = cash ~ market_to_book + ind_cf_vol + rd_to_sales)
+summary(model)
+```
+Well summary already provides you with F-statistics, however, using standard standard errors, and we might want to use HC errors. Import `car` library and test simple F-statistics:
+```{r}
+library("car")
+# exactly what is shown in the summary of the regression above
+linearHypothesis(model, c("market_to_book = 0", "ind_cf_vol = 0", "rd_to_sales = 0"))
+# Some abstract hypothesis
+linearHypothesis(model, c("2 * market_to_book - 5*ind_cf_vol = 0"))
+```
+If you want to include intercept into linear hypothesis use `(Intercept)` variable:
+```{r}
+linearHypothesis(model, c("2 * (Intercept) - 5*ind_cf_vol = 0"))
+```
+Of course, you may want to use non-standard standard errors. In order to do it you can supply variance-covariance matrix into hypothesis test. In the example below I supply heteroskedasticity-consistent standard errors:
+```{r}
+linearHypothesis(model, c("market_to_book = 0", "ind_cf_vol = 0", "rd_to_sales = 0"),
+                 vcov = vcovHC(model))
+```
+
 
 ### Regressions V. Probit and Logit
 Have you heard of neural networks? If you did and want to understand how they are working you first need to get Probit and Logit.
@@ -325,3 +407,13 @@ Working with dates is the most difficult part of data analysis, they are so unst
 ### Regressions VIII. Time Series
 
 ### Some Machine Learning for Prediction
+
+
+
+
+
+
+
+
+
+

@@ -6,14 +6,16 @@ output:
   html_document:
     highlight: pygments
     toc: yes
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
 ---
 
 ### Introduction
 R reminds much more of a traditional programming language when compared to STATA. Hence its capabilities are much bigger and econometrics is not the only subject where you can use it. It is widely used among researches including economists, in data science, machine learning and other fields. One of the best things about R is that it is FREE and OPEN-SOURCE which mean that if you prefer R to STATA you get (1) great variety of packages capable of doing almost anything and (2) enormous community (on such platforms as stackexchange) which is able to give you an answer on virtually every question. So, if decide to use R during this semester, you are more than welcome to ask help from me, but I strongly encourage you to google your question first, after all, this is the way that even experienced programmist work, they google.
 
 However, there are drawbacks in using R. The most important (and some may say that the only one) is that its learning curve is very steep. It is hard to start programming in R, understand how the function work and how to deal with new problems. The second thing is that its function are limited out-of-the-box and you need to download additional packages if you want to have more functionality. 
-
-In this tutorial, which I will be updating on a constant basis, I will explain how to do everything that Konstantin is doing in STATA as well as some specific things about this language and overview of an incredibly powerful plotting package called "ggplot2".
 
 ### Basics
 Here we will cover the main features of R that are not related to econometrics. We will cover basic data types, how to do basic operations and some trickier stuff that you will need in the future.
@@ -66,6 +68,69 @@ You can calculate determinant using `det()`:
 ```{r}
 det(mat)
 ```
+To practice let's calculate regression coefficients by hand without using built-in function. We are going to estimate the following regression:
+$$ log\_cash_i = \beta_0 + \beta_1 market\_to\_book_i + \beta_2 capex_i + \varepsilon_i $$
+```{r}
+# First upload the data, convert it to data.table format
+# (I will describe this incredibly useful library in more details later)
+data <- read.csv("/Users/rsigalov/Documents/HSENES/R\ Econometrics\ Handbook/CRSP_data.csv", sep = ";")
+library("data.table")
+data <- data.table(data)
+
+# Leave only columns that we need and manually exclude NAs
+data <- data[, .(log_cash, market_to_book, capex)]
+data <- data[!(is.na(log_cash) | is.na(market_to_book) | is.na(capex))]
+head(data)
+
+# Next we create matrices X and Y which will contain variables of interest and 
+# dependent variable, respectively
+# !!!! It is important to add a columns of ones to X matrix in order to 
+# estimate constant coefficient beta_0
+X <- as.matrix(data[, .(intercept = 1, market_to_book, capex)])
+Y <- as.matrix(data[, .(log_cash)])
+head(X)
+head(Y)
+```
+As you may recall, we use the following formula to estimate betas:
+$$ \hat{\beta} = (X'X)^{-1}X'Y $$
+Let's calculate $\hat{\beta}$ and compare the results with a built-in function for regression:
+```{r}
+beta <- solve(t(X) %*% X) %*% t(X) %*% Y
+beta
+model1 <- lm(data = data, log_cash ~ market_to_book + capex)
+model1
+```
+As expected the results are exactly the same. Next, we can calculate standard standard errors. In order to do this we first going to estimate variance-covariance matrix, then extract diagonal and take a square root of it. Assuming homoskedasticity of the data (we will remove this assumption in a moment) the consistent estimate of variance-covariance matrix is given by:
+$$ var-cov = \sigma^2 (X' X)^{-1}, \text{ where } \sigma^2 = \frac{\hat{\varepsilon}'\hat{\varepsilon}}{N - K} \text{ and } \hat{\varepsilon} = Y - X\hat{\beta} $$
+
+```{r}
+residuals <- Y - X %*% beta
+sigma = sqrt(as.numeric((t(residuals) %*% residuals/(dim(X)[1] - dim(X)[2]) )))
+vcov_manual <- sigma^2 * solve(t(X) %*% X)
+se_manual <- sqrt(diag(vcov_manual))
+se_manual
+
+# Now compare it with se produced by built-in variance-covariance matrix function:
+vcov_built <- vcov(model1)
+se_built <- sqrt(diag(vcov_built))
+se_built
+```
+Both results match! Now let's relax the assumption for homoskedasticity and calculate White (or robust) standard errors. The formula for the heteroskedasticity consistent variance-covariance matrix is the following:
+$$ var-cov = (X'X)^{-1} diag(\hat{\varepsilon}_1^2, \dots, \hat{\varepsilon}_N^2)(X'X)^{-1} $$
+where $diag(\hat{\varepsilon}_1^2, \dots, \hat{\varepsilon}_N^2)$ denotes a diagonal matrix produced with elements $\hat{\varepsilon}_1^2, \dots, \hat{\varepsilon}_N^2$ on the main diagonal.
+```{r}
+vcov_white <- solve(t(X) %*% X) %*% (t(X) %*% diag(diag(residuals %*% t(residuals))) %*% X) %*% solve(t(X) %*% X)
+```
+where I use first `diag()` to extract vector of diagonal elements and second `diag()` to produce a diagonal matrix out of these elements. Let's compare the results with built-in function for HC var-cov matrix (using package `sandwich`):
+```{r}
+se_white_manual <- sqrt(diag(vcov_white))
+library("sandwich")
+se_white_built <- sqrt(diag(vcovHC(model1)))
+se_white_manual
+se_white_built
+```
+The results are a little bit different since the estimator requires some normalization which is negligible for large $N$.
+
 
 ### Data.
 Here I will explain how to get data into R. Both from local computer in different formats as well as from the web.
@@ -136,7 +201,7 @@ Here we are going to do a simple regression on our demo dataset. I will show how
 We are going to use data from CRSP and study companys' cash balances and what affects them. Let's import data and look what columns do we need:
 ```{r}
 setwd("~")
-data <- read.csv("/Users/rsigalov/Documents/HSENES/7Semester/R\ Econometrics\ Handbook/CRSP_data.csv", sep = ";")
+data <- read.csv("/Users/rsigalov/Documents/HSENES/R\ Econometrics\ Handbook/CRSP_data.csv", sep = ";")
 colnames(data)
 ```
 Let's first estimate regression:
@@ -187,6 +252,11 @@ predict(model2,
                              rd_to_sales = c(0.3, 0.45)),
         interval = "confidence")
 ```
+If you want to calculate $RMSE$, you can do it just manually since it is 
+$$RMSE = \sqrt{\frac{\sum_{i=1}^n \hat{u}^2}{n}}$$
+```{r}
+sqrt(mean(model$residuals))
+```
 Next we are going to export summary for the second to LaTeX format using package `stargazer`:
 ```{r}
 library("stargazer")
@@ -222,8 +292,8 @@ plot(x = time, y = ts, type = "l")
 I have two datasets which represent results of backtesting of a trading strategy. First file contains parameters on the beginning of the backtest, second file on the end.
 ```{r, message=FALSE}
 setwd("~")
-first <- read.csv("/Users/rsigalov/Documents/HSENES/7Semester/R\ Econometrics\ Handbook/EURUSD_first.csv", sep = ";")
-last <- read.csv("/Users/rsigalov/Documents/HSENES/7Semester/R\ Econometrics\ Handbook/EURUSD_last.csv", sep = ";")
+first <- read.csv("/Users/rsigalov/Documents/HSENES/R\ Econometrics\ Handbook/EURUSD_first.csv", sep = ";")
+last <- read.csv("/Users/rsigalov/Documents/HSENES/R\ Econometrics\ Handbook/EURUSD_last.csv", sep = ";")
 colnames(first)
 ```
 I will do some manipulations with these files and show which columns do we have in the end:
@@ -269,7 +339,7 @@ ggplot(stats, aes(x = spot_chg, y = position_value_chg, shape = factor(scenario_
   geom_point()
 ```
 
-Well, there are not such as many point types. We can separate each group into seprate graph:
+Well, there are no such many point types. We can separate each group into seprate graph:
 ```{r}
 stats$scenario_group <- as.character(stats$scenario_group)
 ggplot(stats, aes(x = spot_chg, y = position_value_chg)) +
@@ -279,7 +349,7 @@ ggplot(stats, aes(x = spot_chg, y = position_value_chg)) +
 
 Above I converted scenario_group column in character format from numerical, to avoid using `factor()`, for some reasons it doesn't work in facet. Of course, we can do not only points, but also lines. Below, I will show several examples. I have the following data:
 ```{r}
-price_data <- read.csv("/Users/rsigalov/Documents/HSENES/7Semester/R\ Econometrics\ Handbook/price_dynamics.csv", sep = ",")
+price_data <- read.csv("/Users/rsigalov/Documents/HSENES/R\ Econometrics\ Handbook/price_dynamics.csv", sep = ",")
 colnames(price_data)
 unique(price_data$sigma_e)
 unique(price_data$k_d)
@@ -369,7 +439,7 @@ Here I will show you how to create LaTeX tables for your descriptive statistics 
 In this section I will show you how to compute F-statistics for the regression and in general how to test linear hypotheses. This can be done using package `car`. Let's get back to our example with CRSP data and issue of companys' cash holdings with several explanatory variables:
 ```{r}
 setwd("~")
-data <- read.csv("/Users/rsigalov/Documents/HSENES/7Semester/R\ Econometrics\ Handbook/CRSP_data.csv", sep = ";")
+data <- read.csv("/Users/rsigalov/Documents/HSENES/R\ Econometrics\ Handbook/CRSP_data.csv", sep = ";")
 model <- lm(data = data, formula = cash ~ market_to_book + ind_cf_vol + rd_to_sales)
 summary(model)
 ```
@@ -397,12 +467,57 @@ Have you heard of neural networks? If you did and want to understand how they ar
 
 ### Plotting. More advanced ggplot2.
 
-### Dates, dates, dates...
-Working with dates is the most difficult part of data analysis, they are so unstandartised.
+### Dates and time
+It may be combersome to deal with dates and especially times. Here I will show how we can easily work with dates and times using R. First we will deal with importing them properly. Suppose that we have date in Russian format `05/06/2017` which is 5th of June, 2017. In order to import this string into format compatible with R we need to do the following:
+```{r}
+date1 <- "05/06/2017"
+date_formatted <- as.Date(date1, format = "%d/%m/%Y")
+date_formatted
+```
+where `%d` means day in double digit format, `%m` month in two-digit format and `%Y` year in FOUR-digit format. Small y (i.e. `%y`) is used for two-digit year formatting. R treats date fromat as number of days since January 1st, 1970 and after some manipulations it can convert it to this number, for example:
+```{r}
+as.numeric(date_formatted)
+```
+The next thing is to deal with time which is a littled bit more tricky. Time in R follow the standard `POSIXct` and has this type. Suppose that you have a really trashy respresentation of time. Date is in format 28/06/2017, time is in format 101122 meaning that it is 10:11:22 and you also given microseconds (10^-6 seconds) 567 and you want to put it all into a one variable to represent time stamp. `POSIXct` is a format which show ho many seconds elapsed since 00:00:00 of January 1st, 1970 and it supports fractional seconds.
+```{r}
+date <- "28/06/2017"
+time <- "101122"
+microsec <- 123456
+
+# First, we deal with complete seconds:
+tstamp <- paste(date, " ", time, sep = "")
+tstamp <- as.POSIXct(tstamp, format = "%d/%m/%Y %H%M%S")
+tstamp
+
+# Seconds, we convert it into numeric representation:
+tstamp <- as.numeric(tstamp)
+
+# Third, we add microseconds as fractions of seconds and convert back to POSIXct
+tstamp <- tstamp + microsec/1e6
+tstamp <- as.POSIXct(tstamp, origin = "1970-01-01")
+tstamp
+```
+Even though you don't see fractional seconds in the representation above they are there and we will check it now and make an operation on date and times. Introduce another time:
+```{r}
+date2 <- "28/06/2017"
+time2 <- "101122"
+microsec2 <- 987654
+tstamp2 <- paste(date2, " ", time2, sep = "")
+tstamp2 <- as.POSIXct(tstamp2, format = "%d/%m/%Y %H%M%S")
+tstamp2 <- as.numeric(tstamp2)
+tstamp2 <- tstamp2 + microsec2/1e6
+tstamp2 <- as.POSIXct(tstamp2, origin = "1970-01-01")
+tstamp2
+
+# substract tstamp from tstamp2:
+as.numeric(tstamp2 - tstamp)
+```
+We can see that the difference is a fraction `0.864198` of a second. This way you can do algebraic operations on times and dates.
 
 ### Regressions VI. Panel data
+Two main thins that we need to learn in order to deal with panel data are fixed effects (possibly multiple) and clustered standard errors.
 
-### Regressions VII. Instrumental Variables and their friends
+### Regressions VII. Instrumental Variables
 
 ### Regressions VIII. Time Series
 
